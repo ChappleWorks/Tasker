@@ -179,7 +179,7 @@ function renderWorkspace(){
     }).join('')||'<tr><td colspan="5" class="view-empty">No tasks yet. Add a task or import a list.</td></tr>'}</tbody></table></div>`;
   }else if(page==='Projects'){
     workspace.innerHTML=pageHeader('Projects','All your workspaces in one place.',btn('＋ New Project','new-project','primary')+btn('Import Task List','import-tasks'))+
-    `<div class="view-grid-cards">${data.projects.map(pr=>`<article class="view-card project-card ${pr.id===data.activeId?'selected':''}" data-project="${safeAttr(pr.id)}" role="button" tabindex="0"><span class="view-pill">${pr.id===data.activeId?'Active project':'Project'}</span><h3 style="margin-top:12px">${esc(pr.title)}</h3><p class="view-muted">${esc(pr.description||'No description yet')}</p>${percentBar(progressOf(pr))}<small>${progressOf(pr)}% complete · ${pr.groups.length} primary tasks</small><div class="view-actions" style="margin-top:12px"><button class="view-button" data-action="select-project" data-pid="${safeAttr(pr.id)}">Open Tasks</button><button class="view-button" data-action="edit-project" data-pid="${safeAttr(pr.id)}">Edit</button></div></article>`).join('')}</div>`;
+    `<div class="view-grid-cards">${data.projects.map(pr=>`<article class="view-card project-card ${pr.id===data.activeId?'selected':''}" data-project="${safeAttr(pr.id)}" role="button" tabindex="0"><span class="view-pill">${pr.id===data.activeId?'Active project':'Project'}</span><h3 style="margin-top:12px">${esc(pr.title)}</h3><p class="view-muted">${esc(pr.description||'No description yet')}</p>${percentBar(progressOf(pr))}<small>${progressOf(pr)}% complete · ${pr.groups.length} primary tasks</small><div class="view-actions" style="margin-top:12px"><button class="view-button" data-action="select-project" data-pid="${safeAttr(pr.id)}">Open Tasks</button><button class="view-button" data-action="edit-project" data-pid="${safeAttr(pr.id)}">Edit</button><button class="view-button danger" data-action="delete-project" data-pid="${safeAttr(pr.id)}">Delete Project</button></div></article>`).join('')}</div>`;
   }else if(page==='Reports'){
     const all=allGroups(),complete=all.filter(x=>metrics(x.group).full).length,inProgress=all.filter(x=>!metrics(x.group).full&&metrics(x.group).done>0).length;
     workspace.innerHTML=pageHeader('Reports','Live progress across your projects.',btn('Operations Report','operations','primary'))+
@@ -278,6 +278,20 @@ workspace.addEventListener('click',event=>{
  else if(action==='reports')openPage('Reports');
  else if(action==='print')window.print();
  else if(action==='select-project'){data.activeId=pid;refresh();openPage('Tasks')}
+ else if(action==='delete-project'){
+  const target=data.projects.find(x=>x.id===pid);
+  if(!target)return;
+  if(!confirm('DELETE PROJECT "'+target.title+'"? This deletes its tasks, notes and workbook data from this browser. This cannot be undone.'))return;
+  data.projects=data.projects.filter(x=>x.id!==pid);
+  if(!data.projects.length){
+    const blankId='project-'+Date.now();
+    data.projects.push({id:blankId,title:'New Project',description:'',notes:'',taskNotes:'',groups:[]});
+  }
+  if(data.activeId===pid)data.activeId=data.projects[0].id;
+  selectedTask=null;
+  refresh();
+  noteToast('Project deleted: '+target.title);
+ }
  else if(action==='edit-project'){
   const pr=data.projects.find(x=>x.id===pid);if(!pr)return;
   const title=prompt('Project name',pr.title);if(title===null||!title.trim())return;
