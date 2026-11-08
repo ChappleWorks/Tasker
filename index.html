@@ -104,7 +104,7 @@ select option {
 <aside class="sidepanel">
 <section class="sidebox"><h2 class="side-title"><span style="color:#ffc700;font-size:28px">ϟ</span>Quick Actions – <span class="red">Most Urgent</span></h2><div id="urgentItems"></div></section>
 <section class="sidebox"><h2 class="side-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V11h4v10M10 21V4h4v17M16 21V8h4v13"/></svg>Project Summary</h2><div class="summary-pane"><div class="summary-info"><div class="summary-line"><span>Total Tasks</span><strong id="summaryTotal">6</strong></div><div class="summary-line"><span>Completed</span><strong id="summaryCompleted" style="color:#00dc77">1</strong></div><div class="summary-line"><span>In Progress</span><strong id="summaryStarted">1</strong></div><div class="summary-line"><span>Pending</span><strong id="summaryPending">4</strong></div><div class="summary-line"><span style="color:#ff5963">Overdue</span><strong id="summaryOverdue" style="color:#ff5963">0</strong></div></div><div id="donut" class="donut"><div class="donut-inner" id="donutPct">40%</div></div></div></section>
-<section class="sidebox"><h2 class="side-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 2v5M17 2v5M3 10h18M8 14h8M8 18h5"/></svg>Notes</h2><div class="notes-tabs"><button class="notes-tab selected" data-notes="project">▣ Project Notes</button><button class="notes-tab" data-notes="task">☑ Task Notes</button></div><div class="note-context" id="noteContext">Project-wide notes</div><textarea class="notes-area" id="notes" placeholder="Project-level notes, decisions, and overall plan..."></textarea><div class="attachment-box"><strong>Selected task files</strong><div class="file-hint">Files are stored locally in this browser, not Google Drive.</div><input id="attachmentFile" type="file" multiple disabled><ul class="attachment-list" id="attachmentList"></ul></div></section>
+<section class="sidebox"><h2 class="side-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M7 2v5M17 2v5M3 10h18M8 14h8M8 18h5"/></svg>Notes</h2><div class="notes-tabs"><button class="notes-tab selected" data-notes="project">▣ Project Notes</button><button class="notes-tab" data-notes="task">☑ Task Notes</button></div><div class="note-context" id="noteContext">Project-wide notes</div><textarea class="notes-area" id="notes" placeholder="Project-level notes, decisions, and overall plan..."></textarea><div class="attachment-box"><strong>Selected task files</strong><div class="file-hint">Files upload to your Google Drive and remain attached after Save / Load.</div><input id="attachmentFile" type="file" multiple disabled><ul class="attachment-list" id="attachmentList"></ul></div></section>
 </aside>
 </div><section class="workspace-page" id="workspacePage" hidden aria-live="polite"></section></main></div></div><div id="toast" class="toast hidden" role="status"></div>
 <script>
@@ -223,7 +223,7 @@ function projectMetrics(){const groups=p()?.groups||[];const d=groups.map(metric
 function ensureChildIds(){for(const pr of data.projects)for(const g of pr.groups)for(const c of g.children){if(!c.id)c.id='child-'+Math.random().toString(36).slice(2)+Date.now().toString(36)}}
 ensureChildIds();
 function selectedItem(){if(!selectedTask||selectedTask.pid!==p()?.id)return null;const g=p().groups.find(g=>g.id===selectedTask.gid);if(!g)return null;if(selectedTask.childId)return g.children.find(c=>c.id===selectedTask.childId)||null;return g}
-function startTaskFileUpload(gid,childId=null){const group=p().groups.find(g=>g.id===gid);if(!group||childId&&!group.children.some(x=>x.id===childId))return;chooseTask(gid,childId);const input=$('#attachmentFile');if(input){input.disabled=false;input.click()}}
+function startTaskFileUpload(gid,childId=null){if(!driveToken||Date.now()>=driveTokenExpires-60000){alert('Connect Google Drive first, then click Attach again.');return}const group=p().groups.find(g=>g.id===gid);if(!group||childId&&!group.children.some(x=>x.id===childId))return;chooseTask(gid,childId);const input=$('#attachmentFile');if(input){input.disabled=false;input.click()}}
 function chooseTask(gid,childId=null){selectedTask={pid:p().id,gid,childId};selectedNote='task';document.querySelectorAll('[data-notes]').forEach(b=>b.classList.toggle('selected',b.dataset.notes==='task'));draw();}
 function noteOwner(){if(selectedNote==='project')return p();return selectedItem()||p()}
 function noteKey(){return selectedNote==='project'?'notes':selectedItem()?'notes':'taskNotes'}
@@ -458,9 +458,68 @@ async function transactFiles(mode,fn){const db=await attachmentDB();return new P
 async function putAttachment(r){return transactFiles('readwrite',s=>s.put(r))}
 async function allAttachmentRecords(){return transactFiles('readonly',s=>s.getAll())}
 async function deleteAttachment(id){return transactFiles('readwrite',s=>s.delete(id))}
-async function updateAttachments(){const el=$('#attachmentList'),f=$('#attachmentFile');if(!el||!f)return;const item=selectedItem();f.disabled=!item;el.innerHTML=!item?'<li>Select a task or subtask to attach files.</li>':'<li>Loading...</li>';if(!item)return;try{const files=(await allAttachmentRecords()).filter(x=>x.projectId===p().id&&x.taskId===selectedTask.gid&&(x.childId||null)===(selectedTask.childId||null));if(!selectedItem())return;el.innerHTML=files.map(x=>`<li><span>${esc(x.name)}</span><button data-attachment-open="${esc(x.id)}">Open</button><button data-attachment-remove="${esc(x.id)}">Remove</button></li>`).join('')||'<li>No attachments.</li>'}catch(err){el.textContent='File storage unavailable in this browser: '+err.message}}
-$('#attachmentFile').onchange=async e=>{const files=[...e.target.files],item=selectedItem();if(!item)return;for(const f of files){try{await putAttachment({id:newId(),projectId:p().id,taskId:selectedTask.gid,childId:selectedTask.childId||null,name:f.name,type:f.type||'application/octet-stream',blob:f,lastModified:f.lastModified})}catch(error){alert('File could not be stored: '+error.message);break}}e.target.value='';await updateAttachments();noteToast('File attachment saved to this browser')};
-$('#attachmentList').onclick=async e=>{const open=e.target.closest('[data-attachment-open]'),remove=e.target.closest('[data-attachment-remove]');if(!open&&!remove)return;try{const files=await allAttachmentRecords(),record=files.find(x=>x.id===(open?.dataset.attachmentOpen||remove?.dataset.attachmentRemove));if(!record)return;if(remove){if(confirm('Remove '+record.name+'?')){await deleteAttachment(record.id);updateAttachments()}return}const blob=record.blob;if(record.type.startsWith('image/')||record.type==='application/pdf'||record.type.startsWith('text/')){const url=URL.createObjectURL(blob);window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),120000)}else downloadBlob(blob,record.name)}catch(err){alert(err.message)}};
+// Task attachment index lives inside each project task; file bytes stay in Google Drive.
+function taskDriveAttachments(item){return Array.isArray(item?.driveAttachments)?item.driveAttachments:[]}
+function driveLinkFor(id){return 'https://drive.google.com/file/d/'+encodeURIComponent(id)+'/view'}
+async function uploadTaskFileToDrive(file){
+ const boundary='tasker-file-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+ const metadata={name:file.name,mimeType:file.type||'application/octet-stream',description:'Attached using LeoNet Tasker'};
+ const body=new Blob([
+  '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
+  JSON.stringify(metadata),'\r\n--'+boundary+'\r\nContent-Type: '+(file.type||'application/octet-stream')+'\r\n\r\n',
+  file,'\r\n--'+boundary+'--'
+ ]);
+ const response=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+boundary},body});
+ const result=await response.json();
+ if(!result.id)throw new Error('Google Drive did not return a file ID');
+ return {id:result.id,name:result.name||file.name,url:result.webViewLink||driveLinkFor(result.id)};
+}
+async function updateAttachments(){
+ const list=$('#attachmentList'),picker=$('#attachmentFile');
+ if(!list||!picker)return;
+ const item=selectedItem();
+ picker.disabled=!item;
+ if(!item){list.innerHTML='<li>Select a task or subtask to see its Google Drive attachments.</li>';return}
+ const attachments=taskDriveAttachments(item);
+ list.innerHTML=attachments.map(x=>'<li><span>'+esc(x.name)+'</span><button type="button" data-attachment-open="'+safeAttr(x.id)+'">Open</button><button type="button" data-attachment-remove="'+safeAttr(x.id)+'">Remove</button></li>').join('')||'<li>No Drive attachments.</li>';
+}
+$('#attachmentFile').onchange=async e=>{
+ const files=[...e.target.files],item=selectedItem(),target={...selectedTask};
+ if(!item){e.target.value='';return}
+ if(!driveToken||Date.now()>=driveTokenExpires-60000){e.target.value='';alert('Connect Google Drive first and try again.');return}
+ const input=e.target;input.disabled=true;
+ let uploaded=0;
+ for(const file of files){
+  try{
+   driveStatus('Uploading '+file.name+' to Google Drive…');
+   const entry=await uploadTaskFileToDrive(file);
+   const pr=data.projects.find(x=>x.id===target.pid);
+   const group=pr?.groups.find(g=>g.id===target.gid);
+   const owner=target.childId?group?.children.find(x=>x.id===target.childId):group;
+   if(!owner){alert('File uploaded to Google Drive, but the original task is no longer available.');break}
+   if(!Array.isArray(owner.driveAttachments))owner.driveAttachments=[];
+   owner.driveAttachments.push(entry);save();uploaded++;
+  }catch(err){alert('Google Drive upload failed for '+file.name+': '+err.message);break}
+ }
+ input.value='';
+ await updateAttachments();
+ if(uploaded){
+  noteToast(uploaded+' file(s) uploaded to Google Drive — saving workspace…');
+  await driveSaveWorkspace();
+ }else driveStatus('Google Drive connected');
+};
+$('#attachmentList').onclick=async e=>{
+ const open=e.target.closest('[data-attachment-open]'),remove=e.target.closest('[data-attachment-remove]');
+ if(!open&&!remove)return;
+ const item=selectedItem();
+ const record=taskDriveAttachments(item).find(x=>x.id===(open?.dataset.attachmentOpen||remove?.dataset.attachmentRemove));
+ if(!record)return;
+ if(open){window.open(record.url||driveLinkFor(record.id),'_blank','noopener,noreferrer');return}
+ if(!confirm('Remove '+record.name+' from this task? The file will remain in Google Drive.'))return;
+ item.driveAttachments=item.driveAttachments.filter(x=>x.id!==record.id);
+ save();await updateAttachments();
+ await driveSaveWorkspace();
+};
 // Separate workbook workspace — intentionally independent from the linked Task Table.
 function workbook(){const pr=p();if(!pr.workbook||!Array.isArray(pr.workbook.sheets))pr.workbook={sheets:[{name:'Sheet 1',cells:{}}]};return pr.workbook}
 const colName=n=>{let v=n+1,out='';while(v>0){v--;out=String.fromCharCode(65+v%26)+out;v=Math.floor(v/26)}return out};
