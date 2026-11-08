@@ -171,7 +171,7 @@ function renderWorkspace(){
   if(page==='Spreadsheet'){
     if(sheetMode==='workbook'){renderWorkbook();return;}
     const rows=current.groups.flatMap((g,i)=>[{g,index:i,child:null},...g.children.map((c,j)=>({g,index:i,child:j}))]);
-    workspace.innerHTML=pageHeader('Spreadsheet','Edit tasks and subtasks in one connected grid.',btn('＋ Primary Task','add-primary','primary')+btn('Import Task List','import-tasks')+btn('Export CSV','export-csv')+btn('Import CSV','import-csv'))+`<div class="sheet-tabs"><button class="active" data-action="task-table">Task Table</button><button data-action="workbook">Workbook</button></div>`+
+    workspace.innerHTML=pageHeader('Spreadsheet','Edit tasks and subtasks in one connected grid.',btn('＋ Primary Task','add-primary','primary')+btn('Import Task List','import-tasks')+btn('Clear All Tasks','clear-project-tasks')+btn('Export CSV','export-csv')+btn('Import CSV','import-csv'))+`<div class="sheet-tabs"><button class="active" data-action="task-table">Task Table</button><button data-action="workbook">Workbook</button></div>`+
     `<div class="view-guide">Changes here update the Tasks view immediately. Primary tasks are uppercase headings when importing; the lines below become subtasks.</div>`+
     `<div class="view-table-wrap"><table class="view-table"><thead><tr><th style="width:50px">Done</th><th>Task / Subtask</th><th style="width:145px">Status</th><th style="width:155px">Due date</th><th style="width:150px">Manage</th></tr></thead><tbody>${rows.map(({g,child})=>{
       const isChild=child!==null,t=isChild?g.children[child]:g,m=metrics(g),done=isChild?t.done:m.full;
@@ -257,6 +257,14 @@ workspace.addEventListener('click',event=>{
  if(action==='new-project')$('#newProject').click();
  else if(action==='add-primary')$('#addTask').click();
  else if(action==='import-tasks')importList();
+ else if(action==='clear-project-tasks'){
+  const pr=p();
+  if(!pr||!pr.groups.length){noteToast('This project has no tasks to clear');return}
+  const total=pr.groups.length;
+  if(!confirm('Clear ALL '+total+' primary tasks and their subtasks from "'+pr.title+'"? This cannot be undone. The project and its notes will remain.'))return;
+  pr.groups=[];refresh();noteToast('All tasks cleared from '+pr.title);
+ }
+
  else if(action==='export-csv')exportCsv();
  else if(action==='import-csv')$('#csvImport').click();
  else if(action==='task-table'){sheetMode='tasks';renderWorkspace()}
