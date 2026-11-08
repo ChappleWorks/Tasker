@@ -137,7 +137,7 @@ const urgent=current.groups.filter(g=>!g.archived&&!metrics(g).full&&g.date).sor
 }
 function noteToast(msg){const el=$('#toast');el.textContent=msg;el.classList.remove('hidden');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>el.classList.add('hidden'),2800)}
 $('#tasks').addEventListener('click',e=>{const upload=e.target.closest('[data-upload-gid]');if(upload){e.stopPropagation();startTaskFileUpload(upload.dataset.uploadGid,upload.dataset.uploadChild||null);return}const b=e.target.closest('[data-expand]');if(b){const g=p().groups.find(g=>g.id===b.dataset.expand);g.expanded=!g.expanded;save();draw();return}if(e.target.closest('input[type=checkbox]'))return;const child=e.target.closest('[data-select-child]');if(child){chooseTask(child.dataset.selectGroup,child.dataset.selectChild);return}const head=e.target.closest('[data-select-group]');if(head)chooseTask(head.dataset.selectGroup);});
-$('#tasks').addEventListener('change',e=>{const el=e.target;if(el.matches('[data-child]')){const g=p().groups.find(g=>g.id===el.dataset.child);g.children[+el.dataset.index].done=el.checked;g.done=metrics(g).full;save();draw()}else if(el.matches('[data-parent]')){const g=p().groups.find(g=>g.id===el.dataset.parent);const action=el.checked?'complete':'reopen';const ok=confirm(`Are you sure you want to ${action} “${g.title}”${g.children.length?' and all its subtasks':''}?`);if(!ok){draw();return}g.children.forEach(t=>t.done=el.checked);g.done=el.checked;save();draw()}});
+$('#tasks').addEventListener('change',e=>{const el=e.target;if(el.matches('[data-child]')){const g=p().groups.find(g=>g.id===el.dataset.child);g.children[+el.dataset.index].done=el.checked;g.done=metrics(g).full;if(g.done)g.expanded=false;save();draw()}else if(el.matches('[data-parent]')){const g=p().groups.find(g=>g.id===el.dataset.parent);const action=el.checked?'complete':'reopen';const ok=confirm(`Are you sure you want to ${action} “${g.title}”${g.children.length?' and all its subtasks':''}?`);if(!ok){draw();return}g.children.forEach(t=>t.done=el.checked);g.done=el.checked;if(el.checked)g.expanded=false;save();draw()}});
 $('#expandAll').onclick=()=>{p().groups.forEach(g=>g.expanded=true);save();draw()};$('#collapseAll').onclick=()=>{p().groups.forEach(g=>g.expanded=false);save();draw()};$('#statusFilter').onchange=draw;$('#search').oninput=e=>{query=e.target.value.trim().toLowerCase();draw()};
 $('#projectPicker').onchange=e=>{data.activeId=e.target.value;selectedTask=null;save();draw()};$('#newProject').onclick=()=>{const title=prompt('New project name');if(!title?.trim())return;const id=String(Date.now());data.projects.push({id,title:title.trim(),description:'',notes:'',taskNotes:'',groups:[]});data.activeId=id;selectedTask=null;save();draw();noteToast('New project created')};
 $('#addTask').onclick=()=>{const title=prompt('New primary task name');if(!title?.trim())return;p().groups.push({id:String(Date.now()),title:title.trim(),done:false,expanded:false,kind:'idle',date:'',children:[]});save();draw()};
@@ -323,14 +323,14 @@ workspace.addEventListener('keydown',event=>{const card=event.target.closest('[d
 workspace.addEventListener('change',event=>{
  const el=event.target;
  if(el.dataset.check){const {group}=locate(el.dataset.gid);if(!group)return;
-  if(el.dataset.check==='child'){const c=group.children[Number(el.dataset.ci)];if(!c)return;c.done=el.checked;group.done=metrics(group).full}
-  else {if(!confirm(`Mark “${group.title}” ${el.checked?'complete':'incomplete'} and update its subtasks?`)){renderWorkspace();return}group.done=el.checked;group.children.forEach(c=>c.done=el.checked)}
+  if(el.dataset.check==='child'){const c=group.children[Number(el.dataset.ci)];if(!c)return;c.done=el.checked;group.done=metrics(group).full;if(group.done)group.expanded=false}
+  else {if(!confirm(`Mark “${group.title}” ${el.checked?'complete':'incomplete'} and update its subtasks?`)){renderWorkspace();return}group.done=el.checked;group.children.forEach(c=>c.done=el.checked);if(el.checked)group.expanded=false}
   refresh();return;
  }
  if(el.dataset.field){const {group}=locate(el.dataset.gid);if(!group)return;const t=el.dataset.ci!==undefined?group.children[Number(el.dataset.ci)]:group;if(!t)return;
   if(el.dataset.field==='title'){if(!el.value.trim()){renderWorkspace();return}t.title=el.value.trim()}
   if(el.dataset.field==='date')t.date=el.value.trim();
-  if(el.dataset.field==='kind'){group.kind=el.value;if(el.value==='completed'){group.done=true;group.children.forEach(c=>c.done=true)}else if(group.done){group.done=false;group.children.forEach(c=>c.done=false)}}
+  if(el.dataset.field==='kind'){group.kind=el.value;if(el.value==='completed'){group.done=true;group.children.forEach(c=>c.done=true);group.expanded=false}else if(group.done){group.done=false;group.children.forEach(c=>c.done=false)}}
   refresh();
  }
 });
