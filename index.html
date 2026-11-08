@@ -201,16 +201,52 @@ function renderWorkspace(){
 function locate(gid,pid){const project=pid?data.projects.find(x=>x.id===pid):p();return {project,group:project?.groups.find(g=>g.id===gid)}}
 function refresh(){save();draw();if(activePage!=='Tasks')renderWorkspace()}
 function importList(){
- const raw=prompt('Paste your list: ALL CAPS primary tasks; lowercase lines underneath as subtasks.');if(!raw?.trim())return;
- const lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);const incoming=[];let group=null;
- for(const line of lines){
+ const host=document.createElement('div');
+ host.id='taskerImportDialog';
+ host.setAttribute('role','dialog');
+ host.setAttribute('aria-modal','true');
+ host.setAttribute('aria-label','Import Task List');
+ host.style.cssText='position:fixed;inset:0;z-index:1000;background:rgba(0,5,18,.85);display:flex;align-items:center;justify-content:center;padding:15px';
+ host.innerHTML='<section style="width:min(820px,100%);max-height:94vh;overflow:auto;background:#081d33;border:1px solid #47a7e7;border-radius:14px;padding:20px;box-shadow:0 15px 60px #000;color:#f2f7ff"><h2 style="margin:0 0 8px">Import Task List</h2><p style="color:#b7cce0;margin:0 0 12px">Paste the whole list. ALL CAPS headings become primary tasks; lines underneath become subtasks. Nothing is saved until you approve.</p><textarea id="taskerImportText" aria-label="Paste task list" placeholder="PROJECT NAME&#10;First subtask&#10;Second subtask&#10;&#10;ANOTHER PROJECT&#10;Another subtask" rows="12" style="display:block;width:100%;min-height:220px;resize:vertical;background:#031225;color:white;border:1px solid #5687aa;border-radius:8px;padding:12px;font:14px/1.5 Consolas,monospace"></textarea><div id="taskerImportPreview" aria-live="polite" style="margin-top:12px;max-height:29vh;overflow:auto"></div><div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:15px"><button type="button" id="taskerImportCancel" style="padding:10px 16px;background:#243e57;border:1px solid #628aaa;border-radius:8px">Cancel</button><button type="button" id="taskerImportReview" style="padding:10px 16px;background:#0754a0;border:1px solid #35a0e8;border-radius:8px">Preview List</button><button type="button" id="taskerImportConfirm" disabled style="padding:10px 16px;background:#0073bd;border:1px solid #35b9ff;border-radius:8px;opacity:.45">Import Approved List</button></div></section>';
+ document.body.appendChild(host);
+ const area=host.querySelector('#taskerImportText'), preview=host.querySelector('#taskerImportPreview'),confirmBtn=host.querySelector('#taskerImportConfirm');
+ let incoming=null;
+ function close(){host.remove()}
+ host.querySelector('#taskerImportCancel').onclick=close;
+ host.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+ host.addEventListener('click',e=>{if(e.target===host)close()});
+ area.addEventListener('input',()=>{incoming=null;confirmBtn.disabled=true;confirmBtn.style.opacity='.45';preview.textContent='List changed. Preview again before importing.'});
+ host.querySelector('#taskerImportReview').onclick=()=>{
+  const lines=area.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const groups=[];let group=null;
+  for(const line of lines){
    const primary=/[A-Z]/.test(line)&&line===line.toUpperCase();
-   if(primary||!group){group={id:newId(),title:line,done:false,expanded:true,kind:'idle',date:'',children:[]};incoming.push(group)}
-   else group.children.push({id:newId(),title:line,done:false,date:''});
- }
- if(!incoming.length)return;
- if(!confirm(`Add ${incoming.length} primary tasks with ${incoming.reduce((n,g)=>n+g.children.length,0)} subtasks to ${p().title}?`))return;
- p().groups.push(...incoming);refresh();noteToast('Task list imported');
+   if(primary){group={id:newId(),title:line,done:false,expanded:true,kind:'idle',date:'',children:[]};groups.push(group)}
+   else if(group){group.children.push({id:newId(),title:line,done:false,date:''})}
+   else{preview.textContent='Start with an ALL CAPS primary task heading before adding subtasks.';return}
+  }
+  if(!groups.length){preview.textContent='Paste at least one ALL CAPS primary task.';return}
+  incoming=groups;
+  preview.replaceChildren();
+  const total=groups.reduce((sum,g)=>sum+g.children.length,0),status=document.createElement('p');
+  status.textContent=groups.length+' primary tasks and '+total+' subtasks will be added to '+p().title+'. Existing tasks stay unchanged.';
+  status.style.cssText='color:#9fdbff;font-weight:bold;margin:0 0 8px';
+  preview.appendChild(status);
+  for(const g of groups){
+   const section=document.createElement('div');section.style.cssText='padding:9px 12px;border:1px solid #325a7c;border-radius:7px;margin:6px 0';
+   const heading=document.createElement('strong');heading.textContent=g.title;section.appendChild(heading);
+   for(const c of g.children){const row=document.createElement('div');row.textContent='  • '+c.title;row.style.cssText='padding:3px 0 0 16px;color:#d2e4f5';section.appendChild(row)}
+   preview.appendChild(section);
+  }
+  confirmBtn.disabled=false;confirmBtn.style.opacity='1';
+ };
+ confirmBtn.onclick=()=>{
+  if(!incoming||!incoming.length)return;
+  const count=incoming.length,subtasks=incoming.reduce((n,g)=>n+g.children.length,0);
+  p().groups.push(...incoming);refresh();close();
+  noteToast(count+' primary tasks and '+subtasks+' subtasks imported');
+ };
+ area.focus();
 }
 function exportCsv(){const rows=[['Project','Primary Task','Subtask','Completed','Status','Due Date']];for(const pr of data.projects)for(const g of pr.groups){rows.push([pr.title,g.title,'',metrics(g).full?'Yes':'No',g.kind,g.date||'']);for(const c of g.children)rows.push([pr.title,g.title,c.title,c.done?'Yes':'No','subtask',c.date||''])}const csv=rows.map(row=>row.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='tasker-tasks.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 workspace.addEventListener('click',event=>{
